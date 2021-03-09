@@ -153,7 +153,8 @@ object AccountController extends Http4sDsl[IO] with IOLogging {
             creationRequest.coin.coinFamily,
             creationRequest.coin,
             creationRequest.syncFrequency,
-            creationRequest.label
+            creationRequest.label,
+            creationRequest.group
           )
 
           _ <- log.info(
@@ -225,7 +226,7 @@ object AccountController extends Http4sDsl[IO] with IOLogging {
         val t = for {
 
           // Get Account Info
-          accountsResult <- accountManagerClient.getAccounts(limit, offset)
+          accountsResult <- accountManagerClient.getAccounts(None, limit, offset)
           accountsWithIds = accountsResult.accounts.map(account => account.id -> account)
 
           // Get Balance

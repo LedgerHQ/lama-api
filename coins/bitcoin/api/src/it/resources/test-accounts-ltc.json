@@ -7,7 +7,8 @@
       "scheme": "BIP44",
       "lookahead_size": 20,
       "coin": "ltc",
-      "label" : "ltc account"
+      "label" : "ltc account",
+      "group": "TestGroup"
     },
     "expected": {
       "extended_public_key": "Ltub2YVEdR2HA21h8snykKmpKoARQqjvVKUv36fLDsisBBxt8tSLKhmPA97vem7Be9GoomUDpVoj4f84So16mAf58LJdHEWKDpmk1wNbXHzPAYu",

@@ -14,8 +14,9 @@ import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
+import co.ledger.lama.common.logging.IOLogging
 
-class AccountManagerIT extends AnyFlatSpecLike with Matchers with TestResources {
+class AccountManagerIT extends AnyFlatSpecLike with Matchers with TestResources with IOLogging {
 
   IOAssertion {
     setup() *>
@@ -42,13 +43,16 @@ class AccountManagerIT extends AnyFlatSpecLike with Matchers with TestResources 
               CoinFamily.Bitcoin,
               Coin.Btc,
               None,
-              None
+              None,
+              "TestGroup"
             )
 
             registeredAccountId = registeredResult.accountId
             registeredSyncId    = registeredResult.syncId
 
+            _ <- log.info("Ping")
             messageSent1 <- worker.consumeWorkerMessage()
+            _ <- log.info("Pong")
 
             // Report a successful sync event with a new cursor.
             syncedCursorJson = Json.obj("blockHeight" -> Json.fromLong(123456789)).asObject
@@ -74,6 +78,7 @@ class AccountManagerIT extends AnyFlatSpecLike with Matchers with TestResources 
             _ <- service.resyncAccount(accountTest.id, wipe = true)
 
             messageSent3 <- worker.consumeWorkerMessage()
+
 
             // Report after a reseed a successful sync event
             _ <- worker.publishReportMessage(

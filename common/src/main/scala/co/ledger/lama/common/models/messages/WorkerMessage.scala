@@ -8,6 +8,7 @@ import io.circe.{Decoder, Encoder}
 import co.ledger.lama.common.models.{AccountIdentifier, WorkableEvent}
 import co.ledger.lama.common.models.implicits._
 
+// TODO: add account group to business ID ?
 case class WorkerMessage[T](account: AccountIdentifier, event: WorkableEvent[T])
     extends WithBusinessId[UUID] {
   val businessId: UUID = account.id

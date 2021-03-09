@@ -7,7 +7,8 @@
       "scheme": "BIP49",
       "lookahead_size": 20,
       "coin": "btc",
-      "label" : "btc account 1"
+      "label" : "btc account 1",
+      "group": "TestGroup"
     },
     "expected": {
       "extended_public_key": "xpub6DDeKs272C9xQyta6cxqz4JwVLFsVSHhv6dbj89ZptN7pt2QHtGt119YtXTKdfA5Hk2TD4F35FuyzXCEQujSDRowuVMnPfY57cnqmk2AKVX",
@@ -27,7 +28,8 @@
       },
       "scheme": "BIP49",
       "lookahead_size": 20,
-      "coin": "btc"
+      "coin": "btc",
+      "group": "TestGroup"
     },
     "expected": {
       "extended_public_key": "xpub6CKb86o7RHSCxuwP5dnxyDySLbnVWypQUxhWpycFZWFTzXuXy3UgGtG3o51oGER6X2UY6zRqd5AXgzNghb9va1FkfzXz6k1RT6EwTwCKejE",
@@ -48,7 +50,8 @@
       "scheme": "BIP84",
       "lookahead_size": 20,
       "coin": "btc",
-      "label" : "btc account 3"
+      "label" : "btc account 3",
+      "group": "TestGroup"
     },
     "expected": {
       "extended_public_key": "xpub6DEHKg8fgKcb9at2u9Xhjtx4tXGyWqUPQAx2zNCzr41gQRyCqpCn7onSoJU4VS96GXyCtAhhFxErnG2pGVvVexaqF7DEfqGGnGk7Havn7C2",
@@ -71,7 +74,8 @@
       "scheme": "BIP44",
       "lookahead_size": 20,
       "coin": "btc",
-      "label" : "btc account 4"
+      "label" : "btc account 4",
+      "group": "TestGroup"
     },
     "expected": {
       "extended_public_key": "xpub6C3C31deXtMmS2Jow12iKen5ELEN53C42AMDLASxWj7DxhT89sdJytAaDz5MGNrqpAFyzDZjKPcz947PFLeVAsrnTtpkfpHEgRTTmVoAhjM",
