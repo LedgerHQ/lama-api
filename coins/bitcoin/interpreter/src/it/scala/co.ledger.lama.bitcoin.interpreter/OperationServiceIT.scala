@@ -108,7 +108,7 @@ class OperationServiceIT extends AnyFlatSpecLike with Matchers with TestResource
           trunc shouldBe false
 
           val op = ops.head
-          val tx = op.transaction.get
+          val tx = op.transaction
 
           op.accountId shouldBe accountId
           op.hash shouldBe insertTx1.hash
@@ -155,8 +155,7 @@ class OperationServiceIT extends AnyFlatSpecLike with Matchers with TestResource
           foundOperation should not be None
           val Some(op) = foundOperation
 
-          op.transaction should not be None
-          val tx = op.transaction.get
+          val tx = op.transaction
 
           op.accountId shouldBe accountId
           op.hash shouldBe insertTx1.hash
@@ -201,7 +200,7 @@ class OperationServiceIT extends AnyFlatSpecLike with Matchers with TestResource
           trunc shouldBe false
 
           val op = ops.head
-          val tx = op.transaction.get
+          val tx = op.transaction
 
           op.accountId shouldBe accountId
           op.hash shouldBe insertTx2.hash
@@ -333,11 +332,8 @@ class OperationServiceIT extends AnyFlatSpecLike with Matchers with TestResource
         )
 
         for {
-          _ <- QueryUtils.saveUnconfirmedTxView(
-            db,
-            accountId,
-            List(unconfirmedTransaction1, unconfirmedTransaction2)
-          )
+          _     <- QueryUtils.saveTx(db, unconfirmedTransaction1, accountId)
+          _     <- QueryUtils.saveTx(db, unconfirmedTransaction2, accountId)
           utxos <- operationService.getUnconfirmedUtxos(accountId)
         } yield {
           utxos should have size 2

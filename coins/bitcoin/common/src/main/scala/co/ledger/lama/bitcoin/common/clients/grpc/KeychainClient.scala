@@ -1,7 +1,6 @@
 package co.ledger.lama.bitcoin.common.clients.grpc
 
 import java.util.UUID
-import cats.data.NonEmptyList
 import cats.effect.{ContextShift, IO}
 import co.ledger.lama.bitcoin.common.models.interpreter.{AccountAddress, ChangeType}
 import co.ledger.lama.bitcoin.common.models.keychain.{AccountKey, KeychainInfo}
@@ -34,7 +33,7 @@ trait KeychainClient {
 
   def getAddressesPublicKeys(
       keychainId: UUID,
-      derivations: NonEmptyList[NonEmptyList[Int]]
+      derivations: List[List[Int]]
   ): IO[List[String]]
 
   def resetKeychain(keychainId: UUID): IO[Unit]
@@ -130,19 +129,14 @@ class KeychainGrpcClient(
 
   def getAddressesPublicKeys(
       keychainId: UUID,
-      derivations: NonEmptyList[NonEmptyList[Int]]
+      derivations: List[List[Int]]
   ): IO[List[String]] =
     client
       .getAddressesPublicKeys(
         keychain.GetAddressesPublicKeysRequest(
           UuidUtils.uuidToBytes(keychainId),
           derivations
-            .map(derivation =>
-              keychain.DerivationPath(
-                derivation.toList
-              )
-            )
-            .toList
+            .map(derivation => keychain.DerivationPath(derivation))
         ),
         new Metadata
       )

@@ -29,6 +29,7 @@ object App extends IOApp {
       accountManagerGrpcChannel: ManagedChannel,
       interpreterGrpcChannel: ManagedChannel,
       transactorGrpcChannel: ManagedChannel,
+      workerGrpcChannel: ManagedChannel,
       keychainGrpcChannel: ManagedChannel
   )
 
@@ -38,16 +39,16 @@ object App extends IOApp {
     val resources = for {
 
       accountManagerGrpcChannel <- grpcManagedChannel(conf.accountManager)
+      interpreterGrpcChannel    <- grpcManagedChannel(conf.bitcoin.interpreter)
+      transactorGrpcChannel     <- grpcManagedChannel(conf.bitcoin.transactor)
+      workerGrpcChannel         <- grpcManagedChannel(conf.bitcoin.worker)
+      keychainGrpcChannel       <- grpcManagedChannel(conf.bitcoin.keychain)
 
-      interpreterGrpcChannel <- grpcManagedChannel(conf.bitcoin.interpreter)
-
-      transactorGrpcChannel <- grpcManagedChannel(conf.bitcoin.transactor)
-
-      keychainGrpcChannel <- grpcManagedChannel(conf.bitcoin.keychain)
     } yield ServiceResources(
       accountManagerGrpcChannel = accountManagerGrpcChannel,
       interpreterGrpcChannel = interpreterGrpcChannel,
       transactorGrpcChannel = transactorGrpcChannel,
+      workerGrpcChannel = workerGrpcChannel,
       keychainGrpcChannel = keychainGrpcChannel
     )
 
@@ -82,6 +83,7 @@ object App extends IOApp {
             HealthFs2Grpc.stub[IO](res.accountManagerGrpcChannel),
             HealthFs2Grpc.stub[IO](res.interpreterGrpcChannel),
             HealthFs2Grpc.stub[IO](res.transactorGrpcChannel),
+            HealthFs2Grpc.stub[IO](res.workerGrpcChannel),
             HealthFs2Grpc.stub[IO](res.keychainGrpcChannel)
           ),
           methodConfig

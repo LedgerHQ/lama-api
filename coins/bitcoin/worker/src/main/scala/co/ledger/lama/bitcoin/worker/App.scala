@@ -5,23 +5,26 @@ import co.ledger.lama.bitcoin.common.clients.grpc.{InterpreterGrpcClient, Keycha
 import co.ledger.lama.bitcoin.common.clients.http.ExplorerHttpClient
 import co.ledger.lama.bitcoin.worker.config.Config
 import co.ledger.lama.bitcoin.worker.services._
+import co.ledger.lama.common.logging.IOLogging
 import co.ledger.lama.common.services.Clients
+import co.ledger.lama.common.services.grpc.HealthService
 import co.ledger.lama.common.models.Coin
-import co.ledger.lama.common.utils.RabbitUtils
+import co.ledger.lama.common.utils.{RabbitUtils, ResourceUtils}
 import co.ledger.lama.common.utils.ResourceUtils.grpcManagedChannel
 import dev.profunktor.fs2rabbit.interpreter.RabbitClient
 import dev.profunktor.fs2rabbit.model.ExchangeType
-import io.grpc.ManagedChannel
+import io.grpc.{ManagedChannel, Server}
 import org.http4s.client.Client
 import pureconfig.ConfigSource
 
-object App extends IOApp {
+object App extends IOApp with IOLogging {
 
   case class WorkerResources(
       rabbitClient: RabbitClient[IO],
       httpClient: Client[IO],
       keychainGrpcChannel: ManagedChannel,
-      interpreterGrpcChannel: ManagedChannel
+      interpreterGrpcChannel: ManagedChannel,
+      server: Server
   )
 
   def run(args: List[String]): IO[ExitCode] = {
@@ -32,7 +35,18 @@ object App extends IOApp {
       keychainGrpcChannel    <- grpcManagedChannel(conf.keychain)
       interpreterGrpcChannel <- grpcManagedChannel(conf.interpreter)
       rabbitClient           <- Clients.rabbit(conf.rabbit)
-    } yield WorkerResources(rabbitClient, httpClient, keychainGrpcChannel, interpreterGrpcChannel)
+
+      serviceDefinitions = List(new HealthService().definition)
+
+      grcpService <- ResourceUtils.grpcServer(conf.grpcServer, serviceDefinitions)
+
+    } yield WorkerResources(
+      rabbitClient,
+      httpClient,
+      keychainGrpcChannel,
+      interpreterGrpcChannel,
+      grcpService
+    )
 
     resources.use { res =>
       val syncEventService = new RabbitSyncEventService(
@@ -42,11 +56,9 @@ object App extends IOApp {
         conf.routingKey
       )
 
-      val keychainClient = new KeychainGrpcClient(res.keychainGrpcChannel)
-
+      val keychainClient    = new KeychainGrpcClient(res.keychainGrpcChannel)
       val interpreterClient = new InterpreterGrpcClient(res.interpreterGrpcChannel)
-
-      val explorerClient = new ExplorerHttpClient(res.httpClient, conf.explorer, _)
+      val explorerClient    = new ExplorerHttpClient(res.httpClient, conf.explorer, _)
 
       val cursorStateService: Coin => CursorStateService[IO] =
         c => CursorStateService(explorerClient(c), interpreterClient).getLastValidState(_, _)
@@ -84,6 +96,8 @@ object App extends IOApp {
             )
           )
         )
+
+        _ <- IO(res.server.start()) *> log.info("Worker started")
 
         res <- worker.run.compile.lastOrError.as(ExitCode.Success)
       } yield res

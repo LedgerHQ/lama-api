@@ -2,6 +2,7 @@ package co.ledger.lama.bitcoin.transactor.services
 
 import cats.data.Validated
 import cats.effect.IO
+import co.ledger.lama.bitcoin.common.models.interpreter.Utxo
 import co.ledger.lama.bitcoin.common.models.{
   Address,
   BitcoinLikeNetwork,
@@ -31,6 +32,7 @@ class BitcoinLibClientServiceMock extends BitcoinLibClient {
   )
   def generateSignatures(
       rawTransaction: transactor.RawTransaction,
+      utxos: List[Utxo],
       privkey: String
   ): IO[List[Array[Byte]]] = ???
 

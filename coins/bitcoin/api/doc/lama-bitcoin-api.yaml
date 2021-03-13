@@ -331,7 +331,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SendTransactionRequest'
+              $ref: '#/components/schemas/BroadcastTransactionRequest'
       responses:
         200:
           description: Broadcasted transaction
@@ -522,7 +522,7 @@ components:
           type: number
           format: int32
           example: 200
-        custom_fee:
+        custom_fee_per_kb:
           type: string
           format: bigint
           example: '20000'
@@ -545,6 +545,8 @@ components:
         - hash
         - witness_hash
         - utxos
+        - fee
+        - fee_per_kb
       properties:
         hex:
           type: string
@@ -559,14 +561,28 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Utxo'
-    SendTransactionRequest:
+        fee:
+          type: string
+          format: bigint
+          example: '2000000'
+        fee_per_kb:
+          type: string
+          format: bigint
+          example: '20000'
+    BroadcastTransactionRequest:
       required:
         - raw_transaction
+        - derivations
         - signatures
       type: object
       properties:
         raw_transaction:
           $ref: '#/components/schemas/RawTransaction'
+        derivations:
+          type: array
+          description: Derivation paths of uxtos to spend
+          items:
+            $ref: '#/components/schemas/Derivation'
         signatures:
           type: array
           items:
@@ -864,6 +880,7 @@ components:
         - script_hex
         - derivation
         - time
+        - used_in_mempool
       type: object
       properties:
         transaction_hash:
@@ -886,6 +903,9 @@ components:
           $ref: '#/components/schemas/Derivation'
         change_type:
           $ref: '#/components/schemas/ChangeType'
+        used_in_mempool:
+          type: boolean
+          example: false
         time:
           type: string
           format: timestamp

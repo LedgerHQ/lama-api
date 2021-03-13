@@ -1,6 +1,7 @@
 package co.ledger.lama.bitcoin.interpreter
 
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 import cats.data.NonEmptyList
@@ -95,8 +96,7 @@ class InterpreterIT extends AnyFlatSpecLike with Matchers with TestResources {
           _ <- interpreter.compute(
             accountId,
             List(inputAddress, outputAddress2),
-            Coin.Btc,
-            block.height
+            Coin.Btc
           )
 
           resOpsBeforeDeletion <- interpreter.getOperations(
@@ -196,13 +196,12 @@ class InterpreterIT extends AnyFlatSpecLike with Matchers with TestResources {
         )
 
         for {
-          _ <- interpreter.saveUnconfirmedTransactions(accountId, List(uTx))
-          _ <- interpreter.saveUnconfirmedTransactions(accountId, List(uTx2))
+          _ <- interpreter.saveTransactions(accountId, List(uTx))
+          _ <- interpreter.saveTransactions(accountId, List(uTx2))
           _ <- interpreter.compute(
             accountId,
             List(outputAddress1),
-            Coin.Btc,
-            block.height
+            Coin.Btc
           )
           res <- interpreter.getOperations(accountId, 0L, 20, 0, Sort.Descending)
           GetOperationsResult(operations, _, _) = res
@@ -221,7 +220,7 @@ class InterpreterIT extends AnyFlatSpecLike with Matchers with TestResources {
 
   }
 
-  "an unconfirmed transaction" should "not be saved if it's been mined" in IOAssertion {
+  "an unconfirmed transaction" should "be updated if it's been mined" in IOAssertion {
     setup() *>
       appResources.use { db =>
         val interpreter = new Interpreter(_ => IO.unit, db, 1)
@@ -251,18 +250,144 @@ class InterpreterIT extends AnyFlatSpecLike with Matchers with TestResources {
         )
 
         for {
-          _ <- interpreter.saveUnconfirmedTransactions(accountId, List(uTx))
+          _ <- interpreter.saveTransactions(accountId, List(uTx))
           _ <- interpreter.saveTransactions(accountId, List(tx))
           _ <- interpreter.compute(
             accountId,
             List(outputAddress1),
-            Coin.Btc,
-            block.height
+            Coin.Btc
           )
           res <- interpreter.getOperations(accountId, 0L, 20, 0, Sort.Descending)
           GetOperationsResult(operations, _, _) = res
         } yield {
           operations should have size 1
+        }
+      }
+
+  }
+
+  "an account" should "go through multiple cycles" in IOAssertion {
+    setup() *>
+      appResources.use { db =>
+        val interpreter = new Interpreter(_ => IO.unit, db, 1)
+
+        val uTx1 = TransactionView(
+          "tx1",
+          "tx1",
+          time,
+          0,
+          1000,
+          List(
+            InputView(".", 0, 0, 101000, inputAddress.accountAddress, "script", List(), 0L, None)
+          ),
+          List(
+            OutputView(0, 100000, outputAddress1.accountAddress, "script", None, None)
+          ), // receive
+          None,
+          1
+        )
+
+        val uTx2 = uTx1.copy(
+          id = "tx2",
+          hash = "tx2",
+          outputs = List(
+            OutputView(0, 5000, outputAddress2.accountAddress, "script", None, None)
+          ) // receive
+        )
+
+        val uTx3 = uTx1.copy(
+          id = "tx3",
+          hash = "tx3",
+          inputs = List(
+            InputView(
+              "tx1",
+              0,
+              0,
+              100000,
+              outputAddress1.accountAddress,
+              "script",
+              List(),
+              0L,
+              None
+            ) // send utxo from tx1
+          ),
+          outputs = List(OutputView(0, 99000, inputAddress.accountAddress, "script", None, None))
+        )
+
+        for {
+          _             <- interpreter.saveTransactions(accountId, List(uTx1))
+          _             <- interpreter.compute(accountId, List(outputAddress1), Coin.Btc)
+          firstBalance  <- interpreter.getBalance(accountId)
+          firstBalanceH <- interpreter.getBalanceHistory(accountId, None, None, 0)
+          r1            <- interpreter.getOperations(accountId, 0L, 20, 0, Sort.Descending)
+          GetOperationsResult(firstOperations, _, _) = r1
+
+          _ <- interpreter.saveTransactions(
+            accountId,
+            List(
+              uTx1.copy(block = Some(BlockView("block1", 1L, time))), // mine first transaction
+              uTx2
+            )
+          )
+          _              <- interpreter.compute(accountId, List(outputAddress1, outputAddress2), Coin.Btc)
+          secondBalance  <- interpreter.getBalance(accountId)
+          secondBalanceH <- interpreter.getBalanceHistory(accountId, None, None, 0)
+          r2             <- interpreter.getOperations(accountId, 0L, 20, 0, Sort.Descending)
+          GetOperationsResult(secondOperations, _, _) = r2
+
+          _ <- interpreter.saveTransactions(
+            accountId,
+            List(
+              uTx2.copy(block =
+                Some(BlockView("block2", 2L, time.plus(10, ChronoUnit.MINUTES)))
+              ), // mine second transaction
+              uTx3
+            )
+          )
+          _            <- interpreter.compute(accountId, List(outputAddress1, outputAddress2), Coin.Btc)
+          lastBalance  <- interpreter.getBalance(accountId)
+          lastBalanceH <- interpreter.getBalanceHistory(accountId, None, None, 0)
+          r3           <- interpreter.getOperations(accountId, 0L, 20, 0, Sort.Descending)
+          GetOperationsResult(lastOperations, _, _) = r3
+
+        } yield {
+
+          firstOperations should have size 1
+          firstBalance.balance shouldBe 0
+          firstBalance.unconfirmedBalance shouldBe 100000
+          // mempool
+          firstBalanceH.last.balance shouldBe firstBalance.unconfirmedBalance
+          firstBalanceH.last.blockHeight shouldBe None
+
+          val firstBH = BalanceHistory(accountId, firstBalance.unconfirmedBalance, Some(1L), time)
+          secondOperations should have size 2
+          secondBalance.balance shouldBe 100000
+          secondBalance.unconfirmedBalance shouldBe 5000;
+          // mempool
+          secondBalanceH.last.balance shouldBe secondBalance.unconfirmedBalance + secondBalance.balance
+          secondBalanceH.last.blockHeight shouldBe None
+          // first block
+          secondBalanceH.head.balance shouldBe firstBH.balance
+          secondBalanceH.head.blockHeight shouldBe firstBH.blockHeight
+
+          val secondBH = BalanceHistory(
+            accountId,
+            secondBalance.unconfirmedBalance + secondBalance.balance,
+            Some(2L),
+            time.plus(10, ChronoUnit.MINUTES)
+          )
+          lastOperations should have size 3
+          lastBalance.balance shouldBe 105000
+          lastBalance.unconfirmedBalance shouldBe -100000
+          // mempool
+          lastBalanceH.last.balance shouldBe lastBalance.unconfirmedBalance + lastBalance.balance
+          lastBalanceH.last.blockHeight shouldBe None
+          // second block
+          lastBalanceH(1).balance shouldBe secondBH.balance
+          lastBalanceH(1).blockHeight shouldBe secondBH.blockHeight
+          // first block
+          lastBalanceH.head.balance shouldBe firstBH.balance
+          lastBalanceH.head.blockHeight shouldBe firstBH.blockHeight
         }
       }
 

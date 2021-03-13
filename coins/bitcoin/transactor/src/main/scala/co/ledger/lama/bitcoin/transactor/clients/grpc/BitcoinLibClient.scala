@@ -31,6 +31,7 @@ trait BitcoinLibClient {
 
   def generateSignatures(
       rawTransaction: RawTransaction,
+      utxos: List[Utxo],
       privkey: String
   ): IO[List[Array[Byte]]]
 
@@ -100,6 +101,7 @@ class BitcoinLibGrpcClient(val managedChannel: ManagedChannel)(implicit val cs: 
 
   def generateSignatures(
       rawTransaction: RawTransaction,
+      utxos: List[Utxo],
       privkey: String
   ): IO[List[Array[Byte]]] =
     client
@@ -113,15 +115,14 @@ class BitcoinLibGrpcClient(val managedChannel: ManagedChannel)(implicit val cs: 
               None
             )
           ),
-          rawTransaction.utxos
+          utxos
             .map(utxo =>
               libgrpc.Utxo(
                 utxo.scriptHex,
                 utxo.value.toString,
                 utxo.derivation.toList
               )
-            )
-            .toList,
+            ),
           privkey
         ),
         new Metadata
@@ -150,10 +151,7 @@ class BitcoinLibGrpcClient(val managedChannel: ManagedChannel)(implicit val cs: 
         new Metadata
       )
       .map(RawTransactionResponse.fromProto)
-      .handleErrorWith { e =>
-        e.printStackTrace()
-        IO.raiseError(e)
-      }
+      .handleErrorWith(IO.raiseError)
 
   private def utxosToInputs(utxo: Utxo): Input = {
     Input(

@@ -292,7 +292,7 @@ class BalanceIT extends AnyFlatSpecLike with Matchers with TestResources {
           _ <- QueryUtils.saveTx(db, tx1, accountId)
           _ <- QueryUtils.saveTx(db, tx2, accountId)
           _ <- QueryUtils.saveTx(db, tx3, accountId)
-          _ <- QueryUtils.saveUnconfirmedTxView(db, accountId, List(unconfirmedTx))
+          _ <- QueryUtils.saveTx(db, unconfirmedTx, accountId)
           _ <- flaggingService.flagInputsAndOutputs(
             accountId,
             List(address2, address3, address1)
@@ -309,13 +309,13 @@ class BalanceIT extends AnyFlatSpecLike with Matchers with TestResources {
 
         } yield {
           current.balance shouldBe BigInt(24434)
-          current.unconfirmedBalance shouldBe BigInt(16000)
+          current.unconfirmedBalance shouldBe BigInt(-8434)
           current.utxos shouldBe 2
           current.received shouldBe BigInt(105000)
           current.sent shouldBe BigInt(80566)
 
           balances should have size 4
-          balances.last.balance shouldBe current.unconfirmedBalance
+          balances.last.balance shouldBe current.unconfirmedBalance + current.balance
         }
       }
   }

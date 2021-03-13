@@ -1,7 +1,8 @@
 package co.ledger.lama.bitcoin.transactor
 
-import cats.data.{NonEmptyList, Validated}
+import cats.data.Validated
 import cats.effect.{ConcurrentEffect, IO}
+import co.ledger.lama.bitcoin.common.models.interpreter.Utxo
 import co.ledger.lama.bitcoin.common.models.{Address, InvalidAddress}
 import co.ledger.lama.bitcoin.common.models.transactor.{
   CoinSelectionStrategy,
@@ -31,10 +32,10 @@ class TransactorGrpcService(transactor: Transactor) extends TransactorService wi
       keychainId <- UuidUtils.bytesToUuidIO(request.keychainId)
       accountId  <- UuidUtils.bytesToUuidIO(request.accountId)
       coin       <- BitcoinLikeCoin.fromKeyIO(request.coinId)
-      outputs       = request.outputs.map(PrepareTxOutput.fromProto).toList
-      coinSelection = CoinSelectionStrategy.fromProto(request.coinSelection)
-      feeLevel      = FeeLevel.fromProto(request.feeLevel)
-      optCustomFee  = if (request.customFee > 0L) Some(request.customFee) else None
+      outputs           = request.outputs.map(PrepareTxOutput.fromProto).toList
+      coinSelection     = CoinSelectionStrategy.fromProto(request.coinSelection)
+      feeLevel          = FeeLevel.fromProto(request.feeLevel)
+      optCustomFeePerKb = if (request.customFeePerKb > 0L) Some(request.customFeePerKb) else None
 
       _ <- log.info(
         s"""Preparing transaction:
@@ -42,31 +43,23 @@ class TransactorGrpcService(transactor: Transactor) extends TransactorService wi
             - strategy: ${coinSelection.name}
             - coin: ${coin.name}
             - feeLevel: $feeLevel
-            - customFee: $optCustomFee
+            - customFeePerKb: $optCustomFeePerKb
             - feeLevel: $feeLevel
             - maxUtxos: ${request.maxUtxos}
          """
       )
 
-      rawTransaction <- transactor.createTransaction(
+      txRes <- transactor.createTransaction(
         accountId,
         keychainId,
         outputs,
         coin,
         coinSelection,
         feeLevel,
-        optCustomFee,
+        optCustomFeePerKb,
         request.maxUtxos
       )
-
-    } yield {
-      RawTransaction(
-        rawTransaction.hex,
-        rawTransaction.hash,
-        rawTransaction.witnessHash,
-        NonEmptyList.fromListUnsafe(rawTransaction.utxos)
-      ).toProto
-    }
+    } yield txRes.toProto
 
   def generateSignatures(
       request: protobuf.GenerateSignaturesRequest,
@@ -78,6 +71,8 @@ class TransactorGrpcService(transactor: Transactor) extends TransactorService wi
         request.rawTransaction.map(RawTransaction.fromProto)
       )(new Exception("Raw Transaction : bad format"))
 
+      utxos = request.utxos.map(Utxo.fromProto).toList
+
       _ <- log.info(
         s"""Transaction to sign:
             - hex: ${rawTransaction.hex}
@@ -86,7 +81,7 @@ class TransactorGrpcService(transactor: Transactor) extends TransactorService wi
       )
 
       signatures <- transactor
-        .generateSignatures(rawTransaction, request.privKey)
+        .generateSignatures(rawTransaction, utxos, request.privKey)
 
       _ <- log.info(s"Get ${signatures.size} signatures")
 
@@ -98,9 +93,8 @@ class TransactorGrpcService(transactor: Transactor) extends TransactorService wi
   def broadcastTransaction(
       request: protobuf.BroadcastTransactionRequest,
       ctx: io.grpc.Metadata
-  ): IO[protobuf.BroadcastTransactionResponse] =
+  ): IO[protobuf.RawTransaction] =
     for {
-
       coin       <- Coin.fromKeyIO(request.coinId)
       keychainId <- UuidUtils.bytesToUuidIO(request.keychainId)
       rawTransaction <- IO.fromOption(
@@ -115,16 +109,15 @@ class TransactorGrpcService(transactor: Transactor) extends TransactorService wi
          """
       )
 
-      broadcastTx <- transactor.broadcastTransaction(
-        rawTransaction,
+      rawTx <- transactor.broadcastTransaction(
         keychainId,
+        rawTransaction,
+        request.derivations.map(_.path.toList).toList,
         request.signatures.map(_.toByteArray).toList,
         coin
       )
 
-    } yield {
-      broadcastTx.toProto
-    }
+    } yield rawTx.toProto
 
   override def validateAddresses(
       request: protobuf.ValidateAddressesRequest,

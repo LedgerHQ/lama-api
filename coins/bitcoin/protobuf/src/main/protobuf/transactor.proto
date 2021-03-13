@@ -10,7 +10,7 @@ service BitcoinTransactorService {
   rpc ValidateAddresses(ValidateAddressesRequest) returns (ValidateAddressesResponse) {}
   rpc CreateTransaction(CreateTransactionRequest) returns (CreateTransactionResponse) {}
   rpc GenerateSignatures(GenerateSignaturesRequest) returns (GenerateSignaturesResponse) {}
-  rpc BroadcastTransaction(BroadcastTransactionRequest) returns (BroadcastTransactionResponse) {}
+  rpc BroadcastTransaction(BroadcastTransactionRequest) returns (RawTransaction) {}
 }
 
 message ValidateAddressesRequest {
@@ -50,10 +50,10 @@ message CreateTransactionRequest {
   bytes keychain_id = 2;
   CoinSelector coin_selection = 3;
   repeated PrepareTxOutput outputs = 4;
-  string coinId = 5;
+  string coin_id = 5;
   FeeLevel fee_level = 6;
-  int64 custom_fee = 7;
-  int32 maxUtxos = 8;
+  int64 custom_fee_per_kb = 7;
+  int32 max_utxos = 8;
 }
 
 message CreateTransactionResponse {
@@ -61,11 +61,24 @@ message CreateTransactionResponse {
   string hash = 2;
   string witness_hash = 3;
   repeated Utxo utxos = 4;
+  int64 fee = 5;
+  int64 fee_per_kb = 6;
+}
+
+message RawTransaction {
+  string hex = 1;
+  string hash = 2;
+  string witness_hash = 3;
+}
+
+message Derivation {
+  repeated uint32 path = 9;
 }
 
 message GenerateSignaturesRequest {
-  CreateTransactionResponse raw_transaction = 1;
-  string priv_key = 2;
+  RawTransaction raw_transaction = 1;
+  repeated Utxo utxos = 2;
+  string priv_key = 3;
 }
 
 message GenerateSignaturesResponse {
@@ -75,14 +88,9 @@ message GenerateSignaturesResponse {
 message BroadcastTransactionRequest {
   bytes keychain_id = 1;
   string coin_id = 2;
-  CreateTransactionResponse raw_transaction = 3;
-  repeated bytes signatures = 4;
-}
-
-message BroadcastTransactionResponse {
-  string hex = 1;
-  string hash = 2;
-  string witness_hash = 3;
+  RawTransaction raw_transaction = 3;
+  repeated Derivation derivations = 4;
+  repeated bytes signatures = 5;
 }
 
 message PrepareTxOutput {

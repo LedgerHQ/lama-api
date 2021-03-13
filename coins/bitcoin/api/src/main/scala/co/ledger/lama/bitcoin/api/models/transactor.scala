@@ -1,5 +1,6 @@
 package co.ledger.lama.bitcoin.api.models
 
+import co.ledger.lama.bitcoin.common.models.interpreter.Utxo
 import co.ledger.lama.bitcoin.common.models.transactor.{
   CoinSelectionStrategy,
   FeeLevel,
@@ -16,7 +17,7 @@ object transactor {
       coinSelection: CoinSelectionStrategy,
       outputs: List[PrepareTxOutput],
       feeLevel: FeeLevel,
-      customFee: Option[Long],
+      customFeePerKb: Option[Long],
       maxUtxos: Option[Int]
   )
 
@@ -29,6 +30,7 @@ object transactor {
 
   case class BroadcastTransactionRequest(
       rawTransaction: RawTransaction,
+      derivations: List[List[Int]],
       signatures: List[String]
   )
 
@@ -41,6 +43,7 @@ object transactor {
 
   case class GenerateSignaturesRequest(
       rawTransaction: RawTransaction,
+      utxos: List[Utxo],
       privKey: String
   )
 

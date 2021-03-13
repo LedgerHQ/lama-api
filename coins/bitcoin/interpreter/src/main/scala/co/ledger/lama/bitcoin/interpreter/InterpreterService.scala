@@ -29,18 +29,6 @@ class InterpreterGrpcService(
     } yield protobuf.ResultCount(savedCount)
   }
 
-  def saveUnconfirmedTransactions(
-      request: protobuf.SaveTransactionsRequest,
-      ctx: Metadata
-  ): IO[protobuf.ResultCount] = {
-    for {
-      accountId  <- UuidUtils.bytesToUuidIO(request.accountId)
-      _          <- log.info(s"Saving ${request.transactions.size} transactions for $accountId")
-      txs        <- IO(request.transactions.map(TransactionView.fromProto).toList)
-      savedCount <- interpreter.saveUnconfirmedTransactions(accountId, txs)
-    } yield protobuf.ResultCount(savedCount)
-  }
-
   def getLastBlocks(
       request: protobuf.GetLastBlocksRequest,
       ctx: Metadata
@@ -140,7 +128,7 @@ class InterpreterGrpcService(
       )
       accountId <- UuidUtils.bytesToUuidIO(request.accountId)
       addresses <- IO(request.addresses.map(AccountAddress.fromProto).toList)
-      nbOps     <- interpreter.compute(accountId, addresses, coin, request.lastBlockHeight)
+      nbOps     <- interpreter.compute(accountId, addresses, coin)
     } yield protobuf.ResultCount(nbOps)
 
   def getBalance(

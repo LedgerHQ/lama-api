@@ -8,6 +8,7 @@ import co.ledger.lama.bitcoin.common.clients.grpc.TransactorClient.{
   AddressValidation,
   Rejected
 }
+import co.ledger.lama.bitcoin.common.models.interpreter.Utxo
 import co.ledger.lama.bitcoin.common.models.transactor._
 import co.ledger.lama.bitcoin.transactor.protobuf
 import co.ledger.lama.common.clients.grpc.GrpcClient
@@ -32,12 +33,13 @@ trait TransactorClient {
       coinSelection: CoinSelectionStrategy,
       outputs: List[PrepareTxOutput],
       feeLevel: FeeLevel,
-      customFee: Option[Long],
+      customFeePerKb: Option[Long],
       maxUtxos: Option[Int]
-  ): IO[RawTransaction]
+  ): IO[CreateTransactionResponse]
 
-  def generateSignature(
+  def generateSignatures(
       rawTransaction: RawTransaction,
+      utxos: List[Utxo],
       privKey: String
   ): IO[List[String]]
 
@@ -45,8 +47,9 @@ trait TransactorClient {
       keychainId: UUID,
       coinId: String,
       rawTransaction: RawTransaction,
+      derivations: List[List[Int]],
       hexSignatures: List[String]
-  ): IO[BroadcastTransaction]
+  ): IO[RawTransaction]
 }
 
 object TransactorClient {
@@ -77,9 +80,9 @@ class TransactorGrpcClient(
       coinSelection: CoinSelectionStrategy,
       outputs: List[PrepareTxOutput],
       feeLevel: FeeLevel,
-      customFee: Option[Long],
+      customFeePerKb: Option[Long],
       maxUtxos: Option[Int]
-  ): IO[RawTransaction] =
+  ): IO[CreateTransactionResponse] =
     client
       .createTransaction(
         new protobuf.CreateTransactionRequest(
@@ -89,18 +92,23 @@ class TransactorGrpcClient(
           outputs.map(_.toProto),
           coin.name,
           feeLevel.toProto,
-          customFee.getOrElse(0L),
+          customFeePerKb.getOrElse(0L),
           maxUtxos.getOrElse(0)
         ),
         new Metadata
       )
-      .map(RawTransaction.fromProto)
+      .map(CreateTransactionResponse.fromProto)
 
-  def generateSignature(rawTransaction: RawTransaction, privKey: String): IO[List[String]] =
+  def generateSignatures(
+      rawTransaction: RawTransaction,
+      utxos: List[Utxo],
+      privKey: String
+  ): IO[List[String]] =
     client
       .generateSignatures(
         protobuf.GenerateSignaturesRequest(
           Some(rawTransaction.toProto),
+          utxos.map(_.toProto),
           privKey
         ),
         new Metadata
@@ -113,19 +121,21 @@ class TransactorGrpcClient(
       keychainId: UUID,
       coinId: String,
       rawTransaction: RawTransaction,
+      derivations: List[List[Int]],
       hexSignatures: List[String]
-  ): IO[BroadcastTransaction] = {
+  ): IO[RawTransaction] = {
     client
       .broadcastTransaction(
         protobuf.BroadcastTransactionRequest(
           UuidUtils.uuidToBytes(keychainId),
           coinId,
           Some(rawTransaction.toProto),
+          derivations.map(protobuf.Derivation(_)),
           hexSignatures.map(signature => ByteString.copyFrom(HexUtils.valueOf(signature)))
         ),
         new Metadata
       )
-      .map(BroadcastTransaction.fromProto)
+      .map(RawTransaction.fromProto)
   }
 
   def validateAddresses(

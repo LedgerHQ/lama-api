@@ -68,7 +68,7 @@ object KeychainFixture {
 
       override def getAddressesPublicKeys(
           keychainId: UUID,
-          derivations: NonEmptyList[NonEmptyList[Int]]
+          derivations: List[List[Int]]
       ): IO[List[String]] = ???
 
       override def deleteKeychain(keychainId: UUID): IO[Unit] = ???

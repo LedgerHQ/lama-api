@@ -3,6 +3,7 @@ package co.ledger.lama.manager
 import java.util.UUID
 
 import cats.data.NonEmptyList
+import co.ledger.lama.common.logging.DoobieLogHandler
 import co.ledger.lama.common.models.messages.WorkerMessage
 import co.ledger.lama.common.models.{
   AccountIdentifier,
@@ -25,7 +26,7 @@ import io.circe.JsonObject
 import io.circe.syntax.EncoderOps
 import org.postgresql.util.PGInterval
 
-object Queries {
+object Queries extends DoobieLogHandler {
 
   def countAccounts(): ConnectionIO[Int] =
     sql"""SELECT COUNT(*) FROM account_sync_status"""

@@ -26,7 +26,6 @@ import org.http4s.{Method, Request}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import java.time.Instant
 import java.util.UUID
 import scala.language.reflectiveCalls
 
@@ -45,21 +44,9 @@ class AccountControllerSpec extends AnyFlatSpec with Matchers {
     RawTransaction(
       hex = "0x......",
       hash = "......",
-      witnessHash = "........",
-      utxos = NonEmptyList.one(
-        Utxo(
-          transactionHash = "0x123456",
-          outputIndex = 0,
-          value = 0,
-          address = "",
-          scriptHex = "",
-          changeType = None,
-          derivation = NonEmptyList.one(1),
-          time = Instant.now,
-          usedInMempool = false
-        )
-      )
+      witnessHash = "........"
     ),
+    List(List(1)),
     List.empty
   )
 
@@ -259,14 +246,10 @@ object AccountControllerSpec {
       new AccountInfo(id, UUID.randomUUID().toString, CoinFamily.Bitcoin, Coin.Btc, 1L, None, None)
     )
 
-  def broadcastTransaction(rawTransaction: RawTransaction) = new BroadcastTransaction(
-    hex = rawTransaction.hex,
-    hash = rawTransaction.hash,
-    witnessHash = rawTransaction.witnessHash
-  )
+  def broadcastTransaction(rawTransaction: RawTransaction) = rawTransaction
 
   private def transactorClient(
-      broadcastResponse: RawTransaction => IO[BroadcastTransaction] = unusedStub,
+      broadcastResponse: RawTransaction => IO[RawTransaction] = unusedStub,
       validateAddressesResponse: List[Address] => IO[List[AddressValidation]] = unusedStub
   ) = {
     new TransactorClient {
@@ -277,12 +260,13 @@ object AccountControllerSpec {
           coinSelection: CoinSelectionStrategy,
           outputs: List[PrepareTxOutput],
           feeLevel: FeeLevel,
-          customFee: Option[Long],
+          customFeePerKb: Option[Long],
           maxUtxos: Option[Int]
-      ): IO[RawTransaction] = ???
+      ): IO[CreateTransactionResponse] = ???
 
-      override def generateSignature(
+      override def generateSignatures(
           rawTransaction: RawTransaction,
+          utxos: List[Utxo],
           privKey: String
       ): IO[List[String]] = ???
 
@@ -290,8 +274,9 @@ object AccountControllerSpec {
           keychainId: UUID,
           coinId: String,
           rawTransaction: RawTransaction,
+          derivations: List[List[Int]],
           hexSignatures: List[String]
-      ): IO[BroadcastTransaction] = broadcastResponse(rawTransaction)
+      ): IO[RawTransaction] = broadcastResponse(rawTransaction)
 
       override def validateAddresses(
           coin: Coin,

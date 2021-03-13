@@ -57,7 +57,7 @@ object AccountController extends Http4sDsl[IO] with IOLogging {
             createTransactionRequest.coinSelection,
             createTransactionRequest.outputs,
             createTransactionRequest.feeLevel,
-            createTransactionRequest.customFee,
+            createTransactionRequest.customFeePerKb,
             createTransactionRequest.maxUtxos
           )
           .flatMap(Ok(_))
@@ -71,8 +71,9 @@ object AccountController extends Http4sDsl[IO] with IOLogging {
         request <- req.as[GenerateSignaturesRequest]
 
         response <- transactorClient
-          .generateSignature(
+          .generateSignatures(
             request.rawTransaction,
+            request.utxos,
             request.privKey
           )
           .flatMap(Ok(_))
@@ -95,6 +96,7 @@ object AccountController extends Http4sDsl[IO] with IOLogging {
             keychainId,
             account.coin.name,
             request.rawTransaction,
+            request.derivations,
             request.signatures
           )
           .flatMap(Ok(_))

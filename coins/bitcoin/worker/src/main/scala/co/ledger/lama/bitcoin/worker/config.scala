@@ -2,7 +2,7 @@ package co.ledger.lama.bitcoin.worker
 
 import cats.implicits._
 import co.ledger.lama.bitcoin.common.config.ExplorerConfig
-import co.ledger.lama.common.utils.GrpcClientConfig
+import co.ledger.lama.common.utils.{GrpcClientConfig, GrpcServerConfig}
 import dev.profunktor.fs2rabbit.config.{Fs2RabbitConfig, Fs2RabbitNodeConfig}
 import dev.profunktor.fs2rabbit.model.{ExchangeName, QueueName, RoutingKey}
 import pureconfig.ConfigReader
@@ -17,7 +17,8 @@ object config {
       rabbit: Fs2RabbitConfig,
       explorer: ExplorerConfig,
       keychain: GrpcClientConfig,
-      interpreter: GrpcClientConfig
+      interpreter: GrpcClientConfig,
+      grpcServer: GrpcServerConfig
   ) {
     val routingKey: RoutingKey = RoutingKey("bitcoin.*")
 

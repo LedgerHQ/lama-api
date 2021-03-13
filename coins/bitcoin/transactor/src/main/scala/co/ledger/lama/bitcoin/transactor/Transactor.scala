@@ -11,6 +11,7 @@ import co.ledger.lama.bitcoin.common.models.{Address, BitcoinLikeNetwork, Invali
 import co.ledger.lama.bitcoin.common.utils.CoinImplicits._
 import co.ledger.lama.bitcoin.transactor.Transactor.ValidationResult
 import co.ledger.lama.bitcoin.transactor.clients.grpc.BitcoinLibClient
+import co.ledger.lama.bitcoin.transactor.models.RawTxAndUtxos
 import co.ledger.lama.bitcoin.transactor.models.bitcoinLib.SignatureMetadata
 import co.ledger.lama.bitcoin.transactor.services.{CoinSelectionService, TransactionBytes}
 import co.ledger.lama.common.logging.IOLogging
@@ -35,15 +36,14 @@ class Transactor(
       coin: BitcoinLikeCoin,
       coinSelection: CoinSelectionStrategy,
       feeLevel: FeeLevel,
-      customFee: Option[Long],
+      customFeePerKb: Option[Long],
       maxUtxos: Int
-  ): IO[RawTransactionAndUtxos] = {
-
+  ): IO[CreateTransactionResponse] =
     for {
 
       accountInfo <- keychainClient.getKeychainInfo(keychainId)
 
-      utxos <- getUTXOs(accountId, 100, Sort.Ascending).filter(!_.usedInMempool).compile.toList
+      utxos <- getUTXOs(accountId, 100, Sort.Ascending).compile.toList
       _ <- log.info(
         s"""Utxos found for account $accountId:
             - number of utxos: ${utxos.size}
@@ -51,7 +51,7 @@ class Transactor(
          """
       )
 
-      estimatedFeeSatPerKb <- customFee match {
+      estimatedFeePerKb <- customFeePerKb match {
         case Some(custom) => log.info(s"Custom fee: $custom") *> IO.pure(custom)
         case _            =>
           // TODO: testnet smart fees is buggy on explorer v3
@@ -77,45 +77,62 @@ class Transactor(
           )
         }
 
+      estimatedPerByte = estimatedFeePerKb / 1000
+
       estimatedFeePerUtxo = TransactionBytes.estimateSingleUtxoBytesSize(coin)(
         accountInfo.scheme
-      ) * estimatedFeeSatPerKb / 1000
+      ) * estimatedPerByte
 
-      targetAmount = outputs.map(_.value).sum +
-        TransactionBytes.estimateTxBytesSize(coin)(outputs.size) * estimatedFeeSatPerKb / 1000
+      estimatedFee = TransactionBytes.estimateTxBytesSize(coin)(
+        outputs.size
+      ) * estimatedPerByte
 
-      rawTransaction <- createRawTransactionRec(
+      targetAmount = outputs.map(_.value).sum + estimatedFee
+
+      response <- createRawTransactionRec(
         coin.toNetwork,
         coinSelection,
         utxos,
         outputs,
         changeAddress.accountAddress,
-        estimatedFeeSatPerKb,
+        estimatedFeePerKb,
         targetAmount,
         estimatedFeePerUtxo,
         if (maxUtxos == 0) conf.maxUtxos else maxUtxos
       )
+    } yield {
+      CreateTransactionResponse(
+        response.rawTx.hex,
+        response.rawTx.hash,
+        response.rawTx.witnessHash,
+        response.utxos,
+        estimatedFee,
+        estimatedFeePerKb
+      )
+    }
 
-    } yield rawTransaction
-
-  }
-
-  def generateSignatures(rawTransaction: RawTransaction, privKey: String): IO[List[Array[Byte]]] =
+  def generateSignatures(
+      rawTransaction: RawTransaction,
+      utxos: List[Utxo],
+      privKey: String
+  ): IO[List[Array[Byte]]] =
     bitcoinLibClient.generateSignatures(
       rawTransaction,
+      utxos,
       privKey
     )
 
   def broadcastTransaction(
-      rawTransaction: RawTransaction,
       keychainId: UUID,
+      rawTransaction: RawTransaction,
+      derivations: List[List[Int]],
       signatures: List[Array[Byte]],
       coin: Coin
-  ): IO[BroadcastTransaction] = {
+  ): IO[RawTransaction] = {
     for {
       pubKeys <- keychainClient.getAddressesPublicKeys(
         keychainId,
-        rawTransaction.utxos.map(_.derivation)
+        derivations
       )
 
       _ <- log.info(s"Get pub keys $pubKeys")
@@ -155,7 +172,7 @@ class Transactor(
         else IO.unit
 
     } yield {
-      BroadcastTransaction(
+      RawTransaction(
         signedRawTx.hex,
         broadcastTxHash,
         signedRawTx.witnessHash
@@ -185,10 +202,8 @@ class Transactor(
       feesPerUtxo: BigInt,
       maxUtxos: Int,
       retryCount: Int = 5
-  ): IO[RawTransactionAndUtxos] = {
-
+  ): IO[RawTxAndUtxos] =
     for {
-
       _ <-
         if (retryCount <= 0)
           IO.raiseError(
@@ -218,7 +233,7 @@ class Transactor(
 
       _ <- validateTransaction(selectedUtxos, outputs)
 
-      rawTransaction <- bitcoinLibClient.createTransaction(
+      response <- bitcoinLibClient.createTransaction(
         network,
         selectedUtxos,
         outputs,
@@ -227,12 +242,14 @@ class Transactor(
         0L
       )
 
-      rawTransactionAndUtxos <- rawTransaction.notEnoughUtxo.fold(
+      rawTransactionAndUtxos <- response.notEnoughUtxo.fold(
         IO(
-          RawTransactionAndUtxos(
-            rawTransaction.hex,
-            rawTransaction.hash,
-            rawTransaction.witnessHash,
+          RawTxAndUtxos(
+            RawTransaction(
+              response.hex,
+              response.hash,
+              response.witnessHash
+            ),
             selectedUtxos
           )
         )
@@ -250,10 +267,7 @@ class Transactor(
           retryCount - 1
         )
       )
-
     } yield rawTransactionAndUtxos
-
-  }
 
   private def getUTXOs(accountId: UUID, limit: Int, sort: Sort): Stream[IO, Utxo] = {
     def getUtxosRec(accountId: UUID, limit: Int, offset: Int, sort: Sort): Stream[IO, Utxo] = {
@@ -275,8 +289,11 @@ class Transactor(
     getUtxosRec(accountId, limit, 0, sort)
   }
 
-  private def validateTransaction(utxos: List[Utxo], recipients: List[PrepareTxOutput]): IO[Unit] =
-    if (utxos.map(_.value).sum < recipients.map(_.value).sum)
+  private def validateTransaction(
+      utxos: List[Utxo],
+      recipients: List[PrepareTxOutput]
+  ): IO[Unit] =
+    if (utxos.toList.map(_.value).sum < recipients.map(_.value).sum)
       IO.raiseError(new Exception("Not enough coins in Utxos to cover for coins sent."))
     else
       IO.unit
@@ -284,6 +301,5 @@ class Transactor(
 }
 
 object Transactor {
-
   type ValidationResult[A] = List[Validated[InvalidAddress, A]]
 }

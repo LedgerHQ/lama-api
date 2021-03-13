@@ -35,6 +35,7 @@ object HealthController extends Http4sDsl[IO] with IOLogging {
       accountManagerHealthClient: HealthFs2Grpc[IO, Metadata],
       interpreterHealthClient: HealthFs2Grpc[IO, Metadata],
       transactorHealthClient: HealthFs2Grpc[IO, Metadata],
+      workerHealthClient: HealthFs2Grpc[IO, Metadata],
       keychainHealthClient: HealthFs2Grpc[IO, Metadata]
   ): HttpRoutes[IO] =
     HttpRoutes.of[IO] { case GET -> Root =>
@@ -42,6 +43,7 @@ object HealthController extends Http4sDsl[IO] with IOLogging {
         "interpreter"     -> getServingStatus(interpreterHealthClient),
         "account_manager" -> getServingStatus(accountManagerHealthClient),
         "transactor"      -> getServingStatus(transactorHealthClient),
+        "worker"          -> getServingStatus(workerHealthClient),
         "keychain"        -> getServingStatus(keychainHealthClient)
       ).parUnorderedSequence
         .flatMap { statuses =>

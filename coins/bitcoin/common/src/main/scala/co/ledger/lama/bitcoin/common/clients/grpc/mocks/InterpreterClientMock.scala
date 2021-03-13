@@ -18,7 +18,7 @@ class InterpreterClientMock extends InterpreterClient {
   var operations: mutable.Map[UUID, List[Operation]]         = mutable.Map.empty
 
   def saveUnconfirmedTransactions(accountId: UUID, txs: List[TransactionView]): IO[Int] =
-    IO.delay {
+    IO.pure {
       savedUnconfirmedTransactions += accountId -> txs
       txs.size
     }
@@ -29,8 +29,12 @@ class InterpreterClientMock extends InterpreterClient {
   ): IO[Int] = {
     savedTransactions.update(
       accountId,
-      txs ::: savedTransactions.getOrElse(accountId, Nil)
+      txs.filter(_.block.isDefined) ::: savedTransactions.getOrElse(accountId, Nil)
     )
+
+    val unconfirmed = txs.filterNot(_.block.isDefined)
+    if (unconfirmed.nonEmpty)
+      saveUnconfirmedTransactions(accountId, unconfirmed)
 
     IO(txs.size)
   }
@@ -51,7 +55,7 @@ class InterpreterClientMock extends InterpreterClient {
     operations.update(
       accountId,
       operations(accountId)
-        .filter(op => op.transaction.get.block.exists(_.height < blockHeightCursor.getOrElse(0L)))
+        .filter(op => op.transaction.block.exists(_.height < blockHeightCursor.getOrElse(0L)))
     )
 
     IO.pure(0)
@@ -152,7 +156,7 @@ class InterpreterClientMock extends InterpreterClient {
       Operation.uid(Operation.AccountId(accountId), Operation.TxId(tx.id), operationType),
       accountId,
       tx.hash,
-      Some(tx),
+      tx,
       operationType,
       amount,
       tx.fees,
@@ -170,11 +174,11 @@ class InterpreterClientMock extends InterpreterClient {
   ): IO[GetOperationsResult] = {
 
     val ops: List[Operation] = operations(accountId)
-      .filter(_.transaction.get.block.exists(_.height > blockHeight))
-      .sortBy(_.transaction.get.block.get.height)
+      .filter(_.transaction.block.exists(_.height > blockHeight))
+      .sortBy(_.transaction.block.get.height)
       .slice(offset, offset + limit)
 
-    val total = operations(accountId).count(_.transaction.get.block.get.height > blockHeight)
+    val total = operations(accountId).count(_.transaction.block.get.height > blockHeight)
 
     IO(
       new GetOperationsResult(

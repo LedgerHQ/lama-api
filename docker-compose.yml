@@ -24,6 +24,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${ACCOUNT_MANAGER_REDIS_DB}
       BITCOIN_SYNC_FREQUENCY: ${BITCOIN_SYNC_FREQUENCY}
+      DD_TRACE_ENABLED: "false"
     ports:
       - ${ACCOUNT_MANAGER_PORT}:${ACCOUNT_MANAGER_PORT}
     depends_on:
@@ -112,6 +113,9 @@ services:
       BITCOIN_TRANSACTOR_HOST: ${BITCOIN_TRANSACTOR_HOST}
       BITCOIN_TRANSACTOR_PORT: ${BITCOIN_TRANSACTOR_PORT}
       BITCOIN_TRANSACTOR_SSL: ${BITCOIN_TRANSACTOR_SSL}
+      BITCOIN_WORKER_HOST: ${BITCOIN_WORKER_HOST}
+      BITCOIN_WORKER_PORT: ${BITCOIN_WORKER_PORT}
+      BITCOIN_WORKER_SSL: ${BITCOIN_WORKER_SSL}
       LAMA_NOTIFICATIONS_EXCHANGE_NAME: ${LAMA_NOTIFICATIONS_EXCHANGE_NAME}
       RABBIT_HOST: ${RABBIT_HOST}
       RABBIT_PORT: ${RABBIT_PORT}
@@ -120,12 +124,14 @@ services:
       RABBIT_SSL: ${RABBIT_SSL}
       RABBIT_USERNAME: ${RABBIT_USERNAME}
       RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      DD_TRACE_ENABLED: "false"
     ports:
       - ${BITCOIN_API_PORT}:${BITCOIN_API_PORT}
     depends_on:
       - account-manager
       - bitcoin-keychain
       - bitcoin-interpreter
+      - bitcoin-worker
 
   bitcoin-transactor:
     image: docker.pkg.github.com/ledgerhq/lama/lama-bitcoin-transactor:${LAMA_VERSION}
@@ -141,6 +147,7 @@ services:
       BITCOIN_LIB_GRPC_HOST: ${BITCOIN_LIB_GRPC_HOST}
       BITCOIN_LIB_GRPC_PORT: ${BITCOIN_LIB_GRPC_PORT}
       BITCOIN_LIB_GRPC_SSL: ${BITCOIN_LIB_GRPC_SSL}
+      DD_TRACE_ENABLED: "false"
     ports:
       - ${BITCOIN_TRANSACTOR_PORT}:${BITCOIN_TRANSACTOR_PORT}
 
@@ -160,6 +167,7 @@ services:
       RABBIT_SSL: ${RABBIT_SSL}
       RABBIT_USERNAME: ${RABBIT_USERNAME}
       RABBIT_PASSWORD: ${RABBIT_PASSWORD}
+      DD_TRACE_ENABLED: "false"
     depends_on:
       - postgres
     ports:
@@ -169,6 +177,7 @@ services:
     image: docker.pkg.github.com/ledgerhq/lama/lama-bitcoin-worker:${LAMA_VERSION}
     environment:
       JAVA_OPTS: ${BITCOIN_WORKER_JAVA_OPTS}
+      BITCOIN_WORKER_PORT: ${BITCOIN_WORKER_PORT}
       WORKER_EVENTS_EXCHANGE_NAME: ${WORKER_EVENTS_EXCHANGE_NAME}
       LAMA_EVENTS_EXCHANGE_NAME: ${LAMA_EVENTS_EXCHANGE_NAME}
       RABBIT_HOST: ${RABBIT_HOST}
@@ -188,7 +197,10 @@ services:
       BITCOIN_INTERPRETER_HOST: ${BITCOIN_INTERPRETER_HOST}
       BITCOIN_INTERPRETER_PORT: ${BITCOIN_INTERPRETER_PORT}
       BITCOIN_INTERPRETER_SSL: ${BITCOIN_INTERPRETER_SSL}
+      DD_TRACE_ENABLED: "false"
     depends_on:
       - rabbitmq
       - bitcoin-keychain
       - bitcoin-interpreter
+    ports:
+      - ${BITCOIN_WORKER_PORT}:${BITCOIN_WORKER_PORT}

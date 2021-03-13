@@ -20,12 +20,9 @@ object App extends IOApp with IOLogging {
     val resources = for {
 
       interpreterGrpcChannel <- grpcManagedChannel(conf.interpreter)
-
-      keychainGrpcChannel <- grpcManagedChannel(conf.keychain)
-
-      bitcoinLibGrpcChannel <- grpcManagedChannel(conf.bitcoinLib)
-
-      httpClient <- Clients.htt4s
+      keychainGrpcChannel    <- grpcManagedChannel(conf.keychain)
+      bitcoinLibGrpcChannel  <- grpcManagedChannel(conf.bitcoinLib)
+      httpClient             <- Clients.htt4s
 
       interpreterService = new InterpreterGrpcClient(interpreterGrpcChannel)
       keychainService    = new KeychainGrpcClient(keychainGrpcChannel)

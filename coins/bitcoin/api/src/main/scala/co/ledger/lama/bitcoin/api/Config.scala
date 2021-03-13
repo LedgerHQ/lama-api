@@ -16,7 +16,8 @@ object Config {
   case class BitcoinServicesConfig(
       keychain: GrpcClientConfig,
       interpreter: GrpcClientConfig,
-      transactor: GrpcClientConfig
+      transactor: GrpcClientConfig,
+      worker: GrpcClientConfig
   )
 
   case class ServerConfig(
